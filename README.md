@@ -7,12 +7,9 @@ The server will run the IPs from the traceroute into an ip geolocator
 
 # How to run
 
-```
-cd traceroute-app
-python -m venv venv
-pip install -r requirements.txt
-python app.py
-```
+If you're on _Windows_: `python .\traceroute-app\windows.py`
+
+If you're on _Unix_, `python ./traceroute-app/unix.py`
 
 # Infra
 
