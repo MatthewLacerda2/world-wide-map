@@ -1,0 +1,62 @@
+[
+  {
+    "origin": "unknown",
+    "destination": "10.40.64.1",
+    "pingTime": 9
+  },
+  {
+    "origin": "10.40.64.1",
+    "destination": "189.6.1.81",
+    "pingTime": 11
+  },
+  {
+    "origin": "189.6.1.81",
+    "destination": "189.6.2.164",
+    "pingTime": 8
+  },
+  {
+    "origin": "189.6.2.164",
+    "destination": "189.6.2.146",
+    "pingTime": 11
+  },
+  {
+    "origin": "189.6.2.146",
+    "destination": "189.6.48.62",
+    "pingTime": 11
+  },
+  {
+    "origin": "189.6.48.62",
+    "destination": "23.227.38.33",
+    "pingTime": 13
+  },
+  {
+    "origin": "unknown",
+    "destination": "10.40.64.1",
+    "pingTime": 10
+  },
+  {
+    "origin": "10.40.64.1",
+    "destination": "189.6.1.81",
+    "pingTime": 12
+  },
+  {
+    "origin": "189.6.1.81",
+    "destination": "189.6.2.164",
+    "pingTime": 8
+  },
+  {
+    "origin": "189.6.2.164",
+    "destination": "189.6.2.146",
+    "pingTime": 10
+  },
+  {
+    "origin": "189.6.2.146",
+    "destination": "189.6.48.62",
+    "pingTime": 12
+  },
+  {
+    "origin": "189.6.48.62",
+    "destination": "185.146.173.20",
+    "pingTime": 9
+  }
+]
