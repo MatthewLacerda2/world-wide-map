@@ -3,7 +3,13 @@ import { Hop } from "../entities/Hop.js";
 import { CreateHopInput } from "../schemas/hopSchema.js";
 
 export class HopsService {
-  private hopRepository = AppDataSource.getRepository(Hop);
+  /**
+   * Get the hop repository dynamically to ensure we always use the current
+   * AppDataSource (which may be mocked in tests for transaction isolation)
+   */
+  private get hopRepository() {
+    return AppDataSource.getRepository(Hop);
+  }
 
   /**
    * Get all hops from the database

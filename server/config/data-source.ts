@@ -4,6 +4,7 @@ import "reflect-metadata";
 import { DataSource } from "typeorm";
 import { fileURLToPath } from "url";
 import { Hop } from "../entities/Hop.js";
+import { InitialMigration1765072639202 } from "../src/migrations/1765072639202-InitialMigration.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -17,7 +18,7 @@ function getDatabaseUrl(): string {
       return process.env.TEST_DATABASE_URL;
     }
     const host = process.env.DB_HOST || "localhost";
-    const port = process.env.DB_PORT || "5432";
+    const port = process.env.DB_PORT || "5433";
     const database = process.env.TEST_DB_NAME || "world_wide_map_test";
     const user = process.env.DB_USER || "postgres";
     const password = process.env.DB_PASSWORD || "postgres";
@@ -41,10 +42,7 @@ export const AppDataSource = new DataSource({
   type: "postgres",
   url: getDatabaseUrl(),
   entities: [Hop],
-  migrations: [
-    __dirname + "/../src/migrations/*.ts",
-    __dirname + "/../dist/migrations/*.js",
-  ],
+  migrations: [InitialMigration1765072639202],
   synchronize: false, // Never use synchronize in production - use migrations!
   logging: process.env.NODE_ENV === "development",
 });
