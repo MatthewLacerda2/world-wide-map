@@ -11,6 +11,19 @@ const __dirname = dirname(__filename);
 dotenv.config();
 
 function getDatabaseUrl(): string {
+  // Use test database URL if in test mode
+  if (process.env.NODE_ENV === "test") {
+    if (process.env.TEST_DATABASE_URL) {
+      return process.env.TEST_DATABASE_URL;
+    }
+    const host = process.env.DB_HOST || "localhost";
+    const port = process.env.DB_PORT || "5432";
+    const database = process.env.TEST_DB_NAME || "world_wide_map_test";
+    const user = process.env.DB_USER || "postgres";
+    const password = process.env.DB_PASSWORD || "postgres";
+    return `postgresql://${user}:${password}@${host}:${port}/${database}`;
+  }
+
   if (process.env.DATABASE_URL) {
     return process.env.DATABASE_URL;
   }
