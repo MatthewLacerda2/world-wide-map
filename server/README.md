@@ -4,50 +4,53 @@ Express.js server for the crowdsourced internet topology mapping project.
 
 ## Setup
 
-1. Install dependencies:
+### 1. Start PostgreSQL Database (Docker)
 
 ```bash
+# From the project root directory
+docker-compose up -d
+```
+
+This will start a PostgreSQL 16 container on port 5432 with:
+
+- **User**: `postgres`
+- **Password**: `postgres`
+- **Database**: `world_wide_map`
+
+### 2. Create `.env` file
+
+Create a `.env` file in the `server/` directory:
+
+```env
+# Database Configuration
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/world_wide_map
+
+# Server Configuration
+PORT=3000
+NODE_ENV=development
+```
+
+### 3. Install Dependencies
+
+```bash
+cd server
 npm install
 ```
 
-2. Set up environment variables:
+### 4. Run Database Migrations
 
 ```bash
-cp .env.example .env
-# Edit .env with your database credentials
-```
-
-3. Set up the database and run migrations:
-
-```bash
-# Generate migration from entity changes (auto-generates like Alembic!)
+# Generate initial migration from your entity
 npm run migrate:generate src/migrations/InitialMigration
 
-# Run pending migrations
+# Apply migrations
 npm run migrate:run
-
-# Or use the shorthand
-npm run migrate
 ```
 
-**TypeORM Migration Commands:**
-
-- `npm run migrate:generate src/migrations/MigrationName` - Auto-generate migration from entity changes (like `alembic revision --autogenerate`)
-- `npm run migrate:run` - Run pending migrations
-- `npm run migrate:revert` - Revert the last migration
-- `npm run migrate:show` - Show migration status
-
-4. Start the development server:
+### 5. Start Development Server
 
 ```bash
 npm run dev
-```
-
-Or build and run in production:
-
-```bash
-npm run build
-npm start
 ```
 
 ## API Endpoints
