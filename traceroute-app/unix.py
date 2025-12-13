@@ -3,6 +3,7 @@ import subprocess
 import re
 import os
 import getpass
+import uuid
 from typing import List, Optional, Tuple
 from pydantic import BaseModel, ValidationError, field_validator
 
@@ -13,6 +14,7 @@ class Hop(BaseModel):
     ping: Optional[int] = None
 
 class ResultEntry(BaseModel):
+    uuid: str
     origin: str
     destination: str
     pingTime: Optional[int] = None
@@ -157,7 +159,7 @@ def process_traceroute(target: str, debug: bool = False, sudo_password: Optional
     
     return hops
 
-def format_results(hops: List[Hop]) -> List[ResultEntry]:
+def format_results(hops: List[Hop], route_uuid: str) -> List[ResultEntry]:
     """Format hops into origin, destination, pingTime format.
     Calculates ping time as the absolute difference between consecutive hops' ping times."""
     results = []
@@ -186,6 +188,7 @@ def format_results(hops: List[Hop]) -> List[ResultEntry]:
         destination = hops[i].ip
         
         results.append(ResultEntry(
+            uuid=route_uuid,
             origin=origin,
             destination=destination,
             pingTime=ping_time
@@ -265,12 +268,14 @@ def main():
     failed_targets = 0
     
     for target in targets:
+        # Generate a unique UUID for this traceroute
+        route_uuid = str(uuid.uuid4())
         hops = process_traceroute(target, debug=debug_mode, sudo_password=sudo_password)
         if hops:
-            results = format_results(hops)
+            results = format_results(hops, route_uuid)
             all_results.extend(results)
             successful_targets += 1
-            print(f"  Processed {len(results)} hops for {target}")
+            print(f"  Processed {len(results)} hops for {target} (UUID: {route_uuid})")
         else:
             failed_targets += 1
             print(f"  No hops found for {target}")

@@ -76,7 +76,8 @@ def get_geo_info(ip: str) -> Optional[Dict[str, any]]:
         return None
 
 def process_results():
-    """Read results.json, add geolocation data, and save back incrementally."""
+    """Read results.json, add geolocation data, and save back incrementally.
+    Uses UUID to track traceroutes and process entries route by route."""
     # Read the results file
     with open("results.json", "r", encoding="utf-8") as f:
         results = json.load(f)
@@ -99,18 +100,35 @@ def process_results():
     
     print(f"Found {len(ip_cache)} IPs with existing geolocation data")
     
-    # Second pass: Process each result and fill in missing geolocation data
+    # Second pass: Process entries grouped by UUID (traceroute)
+    print("\nProcessing entries by traceroute (UUID)...")
+    current_uuid = None
+    route_count = 0
+    
     for i, entry in enumerate(results):
+        entry_uuid = entry.get("uuid")
+        
+        # Track when UUID changes (new traceroute)
+        if entry_uuid != current_uuid:
+            if current_uuid is not None:
+                print(f"  Completed traceroute {route_count} (UUID: {current_uuid})")
+            current_uuid = entry_uuid
+            route_count += 1
+            if entry_uuid:
+                print(f"  Processing traceroute {route_count} (UUID: {entry_uuid})")
+            else:
+                print(f"  Processing entry {i+1} (no UUID)")
+        
         updated = False
         
         # Process origin IP
         if entry.get("origin") != "unknown" and "origin_geo" not in entry:
             origin_ip = entry["origin"]
             if origin_ip not in ip_cache:
-                print(f"Fetching geolocation for origin IP: {origin_ip}")
+                print(f"    Fetching geolocation for origin IP: {origin_ip}")
                 ip_cache[origin_ip] = get_geo_info(origin_ip)
             else:
-                print(f"Reusing geolocation for origin IP: {origin_ip}")
+                print(f"    Reusing geolocation for origin IP: {origin_ip}")
             entry["origin_geo"] = ip_cache[origin_ip]
             updated = True
         
@@ -118,10 +136,10 @@ def process_results():
         if "destination_geo" not in entry:
             dest_ip = entry["destination"]
             if dest_ip not in ip_cache:
-                print(f"Fetching geolocation for destination IP: {dest_ip}")
+                print(f"    Fetching geolocation for destination IP: {dest_ip}")
                 ip_cache[dest_ip] = get_geo_info(dest_ip)
             else:
-                print(f"Reusing geolocation for destination IP: {dest_ip}")
+                print(f"    Reusing geolocation for destination IP: {dest_ip}")
             entry["destination_geo"] = ip_cache[dest_ip]
             updated = True
         
@@ -129,12 +147,25 @@ def process_results():
         if updated:
             with open("results.json", "w", encoding="utf-8") as f:
                 json.dump(results, f, indent=2, ensure_ascii=False)
-            print(f"Saved progress: entry {i+1}/{len(results)}")
+            print(f"    Saved progress: entry {i+1}/{len(results)}")
     
-    # Third pass: Clamp ping times for all entries with geolocation data
-    print("\nClamping ping times based on speed of light constraints...")
+    if current_uuid is not None:
+        print(f"  Completed traceroute {route_count} (UUID: {current_uuid})")
+    
+    # Third pass: Clamp ping times for all entries with geolocation data, grouped by route
+    print("\nClamping ping times based on speed of light constraints (by traceroute)...")
     clamped_count = 0
+    current_uuid = None
+    route_count = 0
+    
     for i, entry in enumerate(results):
+        entry_uuid = entry.get("uuid")
+        
+        # Track when UUID changes (new traceroute)
+        if entry_uuid != current_uuid:
+            current_uuid = entry_uuid
+            route_count += 1
+        
         # Calculate distance and clamp ping time if both geolocations are available
         origin_geo = entry.get("origin_geo")
         destination_geo = entry.get("destination_geo")
@@ -159,7 +190,8 @@ def process_results():
                     entry["pingTime"] = clamped_ping
                     clamped_count += 1
                     if clamped_count <= 10:  # Only print first 10 to avoid spam
-                        print(f"  Entry {i+1}: Clamped ping time {original_ping}ms -> {clamped_ping}ms (min: {min_ping_time:.2f}ms, distance: {distance/1000:.2f}km)")
+                        route_info = f"route {route_count}" if entry_uuid else f"entry {i+1}"
+                        print(f"  {route_info}: Clamped ping time {original_ping}ms -> {clamped_ping}ms (min: {min_ping_time:.2f}ms, distance: {distance/1000:.2f}km)")
     
     # Save results after clamping
     if clamped_count > 0:
@@ -168,7 +200,7 @@ def process_results():
         if clamped_count > 10:
             print(f"  ... and {clamped_count - 10} more entries clamped")
     
-    print(f"Processed {len(results)} entries. Clamped {clamped_count} ping times based on speed of light constraints.")
+    print(f"\nProcessed {len(results)} entries across {route_count} traceroutes. Clamped {clamped_count} ping times based on speed of light constraints.")
     print(f"Updated results.json")
 
 if __name__ == "__main__":
