@@ -3,57 +3,22 @@ import subprocess
 import re
 import os
 import getpass
-from typing import List, Dict, Optional, Union, Tuple
+from typing import List, Optional, Tuple
+from pydantic import BaseModel, ValidationError, field_validator
 
-def read_targets() -> List[str]:
-    try:
-        with open('targets.json', 'r') as f:
-            targets = json.load(f)
-            if not isinstance(targets, list):
-                raise ValueError("targets.json must contain an array of IPv4 addresses")
-            return targets
-    except FileNotFoundError:
-        print("Error: targets.json not found")
-        return []
-    except json.JSONDecodeError as e:
-        print(f"Error: Invalid JSON in targets.json: {e}")
-        return []
+# Pydantic models
+class Hop(BaseModel):
+    hop: int
+    ip: str
+    ping: Optional[int] = None
+
+class ResultEntry(BaseModel):
+    origin: str
+    destination: str
+    pingTime: Optional[int] = None
 
 # Global variable to cache sudo password
 _sudo_password = None
-
-def check_sudo_needed() -> bool:
-    """Check if we need sudo by trying to run traceroute without it"""
-    # If we're already root, no sudo needed
-    try:
-        if os.geteuid() == 0:
-            return False
-    except AttributeError:
-        # Windows doesn't have geteuid, assume we don't need sudo
-        # (though this script is for Unix/Linux)
-        pass
-    
-    # Try a quick test traceroute to see if we get permission denied
-    try:
-        test_result = subprocess.run(
-            ['traceroute', '-I', '-m', '1', '127.0.0.1'],
-            capture_output=True,
-            text=True,
-            timeout=5
-        )
-        
-        # Check if we got a permission error
-        stderr_lower = test_result.stderr.lower() if test_result.stderr else ''
-        stdout_lower = test_result.stdout.lower() if test_result.stdout else ''
-        combined = stderr_lower + stdout_lower
-        
-        # Look for common permission error messages
-        permission_keywords = ['permission', 'privileges', 'not permitted', 'operation not permitted']
-        return any(keyword in combined for keyword in permission_keywords)
-    except Exception:
-        # If we can't even run traceroute, assume we might need sudo
-        # User will see the actual error when we try to run it
-        return False
 
 def get_sudo_password() -> Optional[str]:
     """Prompt for sudo password once and cache it"""
@@ -62,25 +27,35 @@ def get_sudo_password() -> Optional[str]:
         _sudo_password = getpass.getpass("traceroute requires sudo privileges. Please enter your password: ")
     return _sudo_password
 
-def run_traceroute(target: str, use_sudo: bool = False, sudo_password: Optional[str] = None) -> Tuple[List[str], List[str], int]:
+def read_targets() -> List[str]:
+    """Read targets from JSON file with Pydantic validation"""
     try:
-        if use_sudo and sudo_password:
-            # Use sudo -S to read password from stdin
-            cmd = ['sudo', '-S', 'traceroute', '-I', target]
-            result = subprocess.run(
-                cmd,
-                input=sudo_password + '\n',
-                capture_output=True,
-                text=True,
-                timeout=120
-            )
-        else:
-            result = subprocess.run(
-                ['traceroute', '-I', target],
-                capture_output=True,
-                text=True,
-                timeout=120
-            )
+        with open('targets.json', 'r') as f:
+            data = json.load(f)
+            # Validate it's a list of strings
+            if not isinstance(data, list):
+                raise ValueError("targets.json must contain an array of IPv4 addresses")
+            # Validate each item is a string
+            targets = [str(item) for item in data]
+            return targets
+    except FileNotFoundError:
+        print("Error: targets.json not found")
+        return []
+    except (json.JSONDecodeError, ValueError) as e:
+        print(f"Error: Invalid targets.json: {e}")
+        return []
+
+def run_traceroute(target: str, sudo_password: Optional[str] = None) -> Tuple[List[str], List[str], int]:
+    try:
+        # Always use sudo -S to read password from stdin
+        cmd = ['sudo', '-S', 'traceroute', '-I', target]
+        result = subprocess.run(
+            cmd,
+            input=sudo_password + '\n' if sudo_password else '',
+            capture_output=True,
+            text=True,
+            timeout=120
+        )
         
         # Return both stdout and stderr lines for debugging
         stdout_lines = result.stdout.split('\n') if result.stdout else []
@@ -93,8 +68,8 @@ def run_traceroute(target: str, use_sudo: bool = False, sudo_password: Optional[
         print(f"Error running traceroute to {target}: {e}")
         return [], [], -1
 
-def parse_traceroute_line(line: str) -> Optional[Dict[str, Union[str, int, None]]]:
-    
+def parse_traceroute_line(line: str) -> Optional[Hop]:
+    """Parse a traceroute line and return a Hop model"""
     if re.match(r'^\s*\d+\s+\*\s+\*\s+\*', line):
         return None
     
@@ -124,18 +99,19 @@ def parse_traceroute_line(line: str) -> Optional[Dict[str, Union[str, int, None]
     else:
         ping_value = int(round(min(valid_pings)))
     
-    return {
-        'hop': hop_num,
-        'ip': ip,
-        'ping': ping_value
-    }
+    try:
+        return Hop(hop=hop_num, ip=ip, ping=ping_value)
+    except ValidationError as e:
+        # This shouldn't happen if parsing is correct, but handle it gracefully
+        print(f"  Warning: Failed to validate hop data: {e}")
+        return None
 
-def process_traceroute(target: str, debug: bool = False, use_sudo: bool = False, sudo_password: Optional[str] = None) -> List[Dict[str, Union[str, int, None]]]:
+def process_traceroute(target: str, debug: bool = False, sudo_password: Optional[str] = None) -> List[Hop]:
     print(f"Running traceroute to {target}...")
-    stdout_lines, stderr_lines, returncode = run_traceroute(target, use_sudo=use_sudo, sudo_password=sudo_password)
+    stdout_lines, stderr_lines, returncode = run_traceroute(target, sudo_password=sudo_password)
     
     # Check for sudo password errors
-    if use_sudo and sudo_password:
+    if sudo_password:
         stderr_combined = ' '.join(stderr_lines).lower() if stderr_lines else ''
         if 'sorry' in stderr_combined or 'incorrect password' in stderr_combined or 'authentication failure' in stderr_combined:
             print(f"  Error: Incorrect sudo password. Please run the script again.")
@@ -165,7 +141,7 @@ def process_traceroute(target: str, debug: bool = False, use_sudo: bool = False,
         hop_data = parse_traceroute_line(line)
         if hop_data:
             parsed_count += 1
-            if hop_data['hop'] > 1: # Skip first hop for user privacy
+            if hop_data.hop > 1:  # Skip first hop for user privacy
                 hops.append(hop_data)
     
     # Debug: show if we parsed any lines but filtered them out
@@ -181,7 +157,7 @@ def process_traceroute(target: str, debug: bool = False, use_sudo: bool = False,
     
     return hops
 
-def format_results(hops: List[Dict[str, Union[str, int, None]]]) -> List[Dict[str, Union[str, int, None]]]:
+def format_results(hops: List[Hop]) -> List[ResultEntry]:
     """Format hops into origin, destination, pingTime format.
     Calculates ping time as the absolute difference between consecutive hops' ping times."""
     results = []
@@ -190,12 +166,12 @@ def format_results(hops: List[Dict[str, Union[str, int, None]]]) -> List[Dict[st
         if i == 0:
             origin = "unknown"
             # For first hop, use its ping time directly (time from origin to first hop)
-            ping_time = hops[i]['ping']
+            ping_time = hops[i].ping
         else:
-            origin = hops[i-1]['ip']
+            origin = hops[i-1].ip
             # Calculate the difference between consecutive hops
-            prev_ping = hops[i-1]['ping']
-            curr_ping = hops[i]['ping']
+            prev_ping = hops[i-1].ping
+            curr_ping = hops[i].ping
             
             if prev_ping is not None and curr_ping is not None:
                 # Absolute difference between consecutive hops
@@ -207,17 +183,17 @@ def format_results(hops: List[Dict[str, Union[str, int, None]]]) -> List[Dict[st
                 # If current hop has no ping, set to None
                 ping_time = None
         
-        destination = hops[i]['ip']
+        destination = hops[i].ip
         
-        results.append({
-            'origin': origin,
-            'destination': destination,
-            'pingTime': ping_time
-        })
+        results.append(ResultEntry(
+            origin=origin,
+            destination=destination,
+            pingTime=ping_time
+        ))
     
     return results
 
-def save_results(results: List[Dict[str, Union[str, int, None]]], filename: str = 'results.json'):
+def save_results(results: List[ResultEntry], filename: str = 'results.json'):
     """Save results to JSON file, avoiding duplicates to preserve geolocation data"""
     if not results:
         print("No results to save")
@@ -227,29 +203,32 @@ def save_results(results: List[Dict[str, Union[str, int, None]]], filename: str 
     if os.path.exists(filename):
         try:
             with open(filename, 'r') as f:
-                existing_results = json.load(f)
-                if not isinstance(existing_results, list):
+                data = json.load(f)
+                if not isinstance(data, list):
                     existing_results = []
-        except (json.JSONDecodeError, IOError):
+                else:
+                    # Try to parse existing results, but be lenient for entries with geolocation
+                    existing_results = data  # Keep as dicts to preserve geolocation fields
+        except (json.JSONDecodeError, IOError) as e:
+            print(f"  Warning: Could not read existing results file: {e}")
             existing_results = []
     
     # Create a set of (origin, destination) tuples to track existing entries
     existing_keys = set()
     for entry in existing_results:
-        origin = entry.get('origin', 'unknown')
-        destination = entry.get('destination', '')
+        origin = entry.get('origin', 'unknown') if isinstance(entry, dict) else entry.origin
+        destination = entry.get('destination', '') if isinstance(entry, dict) else entry.destination
         existing_keys.add((origin, destination))
     
     # Only add new entries that don't already exist
     new_results = []
     skipped_count = 0
     for entry in results:
-        origin = entry.get('origin', 'unknown')
-        destination = entry.get('destination', '')
-        key = (origin, destination)
+        key = (entry.origin, entry.destination)
         
         if key not in existing_keys:
-            new_results.append(entry)
+            # Convert Pydantic model to dict for JSON serialization
+            new_results.append(entry.model_dump())
             existing_keys.add(key)  # Track it to avoid duplicates within new_results
         else:
             skipped_count += 1
@@ -276,21 +255,17 @@ def main():
     if debug_mode:
         print("Debug mode enabled")
     
-    # Check if we need sudo and prompt for password if needed
-    use_sudo = False
-    sudo_password = None
-    if check_sudo_needed():
-        print("traceroute -I requires root privileges.")
-        use_sudo = True
-        sudo_password = get_sudo_password()
-        print("Using sudo for traceroute commands...")
+    # Always prompt for sudo password
+    print("traceroute -I requires root privileges.")
+    sudo_password = get_sudo_password()
+    print("Using sudo for traceroute commands...")
     
     all_results = []
     successful_targets = 0
     failed_targets = 0
     
     for target in targets:
-        hops = process_traceroute(target, debug=debug_mode, use_sudo=use_sudo, sudo_password=sudo_password)
+        hops = process_traceroute(target, debug=debug_mode, sudo_password=sudo_password)
         if hops:
             results = format_results(hops)
             all_results.extend(results)
