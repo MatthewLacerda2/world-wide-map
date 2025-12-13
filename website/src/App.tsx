@@ -1,6 +1,6 @@
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import { Fragment, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   MapContainer,
@@ -45,14 +45,52 @@ interface ResultEntry {
   pingTime: number;
   origin_geo?: GeoLocation | null;
   destination_geo?: GeoLocation | null;
+  uuid?: string;
 }
 
 type ResultsData = ResultEntry[];
 
 function getEdgeColor(pingTime: number): string {
-  if (pingTime < 35) return "green";
-  if (pingTime < 120) return "yellow";
+  if (pingTime < 30) return "green";
+  if (pingTime < 90) return "yellow";
   return "red";
+}
+
+// Component for border polyline that updates dynamically
+function BorderPolyline({
+  positions,
+  isHighlighted,
+}: {
+  positions: [[number, number], [number, number]];
+  isHighlighted: boolean;
+}) {
+  const polylineRef = useRef<L.Polyline>(null);
+
+  useEffect(() => {
+    const polyline = polylineRef.current;
+    if (!polyline) return;
+
+    const borderWeight = isHighlighted ? 9 : 5;
+
+    polyline.setStyle({
+      color: "#000000",
+      weight: borderWeight,
+      opacity: 0.3,
+    });
+  }, [isHighlighted]);
+
+  return (
+    <Polyline
+      ref={polylineRef}
+      positions={positions}
+      color="#000000"
+      weight={isHighlighted ? 9 : 5}
+      opacity={isHighlighted ? 1 : 0.3}
+      pathOptions={{
+        interactive: false,
+      }}
+    />
+  );
 }
 
 // Custom component for polyline with mouse-following tooltip
@@ -64,6 +102,10 @@ function EdgeWithTooltip({
   originDisplay,
   destinationDisplay,
   pingDisplay,
+  uuid,
+  highlightedUuid,
+  onHover,
+  onHoverOut,
 }: {
   positions: [[number, number], [number, number]];
   color: string;
@@ -72,6 +114,10 @@ function EdgeWithTooltip({
   originDisplay: string;
   destinationDisplay: string;
   pingDisplay: string;
+  uuid?: string;
+  highlightedUuid?: string | null;
+  onHover: (uuid: string | null) => void;
+  onHoverOut: () => void;
 }) {
   const [tooltipPosition, setTooltipPosition] = useState<{
     x: number;
@@ -82,6 +128,23 @@ function EdgeWithTooltip({
   const map = useMap();
   const tooltipRef = useRef<HTMLDivElement | null>(null);
 
+  const isHighlighted = uuid && highlightedUuid === uuid;
+
+  // Update polyline style when highlight state changes - just increase weight slightly
+  useEffect(() => {
+    const polyline = polylineRef.current;
+    if (!polyline) return;
+
+    const displayWeight = isHighlighted ? weight + 1 : weight;
+
+    // Update the Leaflet polyline style directly - keep original color
+    polyline.setStyle({
+      color: color,
+      weight: displayWeight,
+      opacity: opacity,
+    });
+  }, [isHighlighted, color, weight, opacity]);
+
   useEffect(() => {
     const polyline = polylineRef.current;
     if (!polyline) return;
@@ -90,11 +153,13 @@ function EdgeWithTooltip({
       const containerPoint = map.latLngToContainerPoint(e.latlng);
       setTooltipPosition({ x: containerPoint.x, y: containerPoint.y });
       setIsHovering(true);
+      onHover(uuid || null);
     };
 
     const handleMouseOut = () => {
       setIsHovering(false);
       setTooltipPosition(null);
+      onHoverOut();
     };
 
     polyline.on("mousemove", handleMouseMove);
@@ -104,10 +169,13 @@ function EdgeWithTooltip({
       polyline.off("mousemove", handleMouseMove);
       polyline.off("mouseout", handleMouseOut);
     };
-  }, [map]);
+  }, [map, onHover, onHoverOut, uuid]);
 
   // Get the map container element for portal
   const mapContainer = map.getContainer();
+
+  // Use highlighted style if this edge is part of the highlighted UUID group
+  const displayWeight = isHighlighted ? weight + 1 : weight;
 
   return (
     <>
@@ -115,7 +183,7 @@ function EdgeWithTooltip({
         ref={polylineRef}
         positions={positions}
         color={color}
-        weight={weight}
+        weight={displayWeight}
         opacity={opacity}
         pathOptions={{
           interactive: true,
@@ -194,6 +262,15 @@ function App() {
   const [data, setData] = useState<ResultsData>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [highlightedUuid, setHighlightedUuid] = useState<string | null>(null);
+
+  const handleEdgeHover = useCallback((uuid: string | null) => {
+    setHighlightedUuid(uuid);
+  }, []);
+
+  const handleEdgeHoverOut = useCallback(() => {
+    setHighlightedUuid(null);
+  }, []);
 
   // Fetch results.json from GitHub Gist
   useEffect(() => {
@@ -352,17 +429,20 @@ function App() {
               ? `${entry.pingTime} ms`
               : "N/A";
 
+          const isHighlighted: boolean = !!(
+            entry.uuid && highlightedUuid === entry.uuid
+          );
+
           return (
-            <Fragment key={`edge-group-${index}`}>
+            <Fragment
+              key={`edge-group-${index}-${
+                isHighlighted ? "highlighted" : "normal"
+              }`}
+            >
               {/* Border effect - render a darker, thicker line underneath */}
-              <Polyline
+              <BorderPolyline
                 positions={positions}
-                color="#000000"
-                weight={5}
-                opacity={0.3}
-                pathOptions={{
-                  interactive: false,
-                }}
+                isHighlighted={isHighlighted}
               />
               {/* Main colored line on top */}
               <EdgeWithTooltip
@@ -373,6 +453,10 @@ function App() {
                 originDisplay={originDisplay}
                 destinationDisplay={destinationDisplay}
                 pingDisplay={pingDisplay}
+                uuid={entry.uuid}
+                highlightedUuid={highlightedUuid}
+                onHover={handleEdgeHover}
+                onHoverOut={handleEdgeHoverOut}
               />
             </Fragment>
           );

@@ -200,7 +200,63 @@ def process_results():
         if clamped_count > 10:
             print(f"  ... and {clamped_count - 10} more entries clamped")
     
+    # Fourth pass: Filter out hops with distance > 3000km
+    print("\nFiltering out hops with distance > 3000km...")
+    filtered_results = []
+    filtered_count = 0
+    current_uuid = None
+    route_count = 0
+    
+    for i, entry in enumerate(results):
+        entry_uuid = entry.get("uuid")
+        
+        # Track when UUID changes (new traceroute)
+        if entry_uuid != current_uuid:
+            current_uuid = entry_uuid
+            route_count += 1
+        
+        # Calculate distance and filter if > 3000km
+        origin_geo = entry.get("origin_geo")
+        destination_geo = entry.get("destination_geo")
+        
+        should_filter = False
+        
+        if origin_geo and destination_geo:
+            origin_lat = origin_geo.get("latitude")
+            origin_lon = origin_geo.get("longitude")
+            dest_lat = destination_geo.get("latitude")
+            dest_lon = destination_geo.get("longitude")
+            
+            # Only filter if we have valid coordinates
+            if (origin_lat is not None and origin_lon is not None and 
+                dest_lat is not None and dest_lon is not None):
+                
+                distance = calculate_distance(origin_lat, origin_lon, dest_lat, dest_lon)
+                distance_km = distance / 1000  # Convert to kilometers
+                
+                if distance_km > 3000:
+                    should_filter = True
+                    filtered_count += 1
+                    if filtered_count <= 10:  # Only print first 10 to avoid spam
+                        route_info = f"route {route_count}" if entry_uuid else f"entry {i+1}"
+                        print(f"  {route_info}: Filtered hop {entry.get('origin')} -> {entry.get('destination')} (distance: {distance_km:.2f}km)")
+        
+        # Keep entry if not filtered (or if we don't have geolocation data to calculate distance)
+        if not should_filter:
+            filtered_results.append(entry)
+    
+    # Save filtered results
+    if filtered_count > 0:
+        with open("results.json", "w", encoding="utf-8") as f:
+            json.dump(filtered_results, f, indent=2, ensure_ascii=False)
+        if filtered_count > 10:
+            print(f"  ... and {filtered_count - 10} more hops filtered")
+        print(f"Filtered out {filtered_count} hop(s) with distance > 3000km")
+        results = filtered_results
+    
     print(f"\nProcessed {len(results)} entries across {route_count} traceroutes. Clamped {clamped_count} ping times based on speed of light constraints.")
+    if filtered_count > 0:
+        print(f"Filtered out {filtered_count} hop(s) with distance > 3000km.")
     print(f"Updated results.json")
 
 if __name__ == "__main__":
