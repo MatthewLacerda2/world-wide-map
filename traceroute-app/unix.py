@@ -2,7 +2,8 @@ import json
 import subprocess
 import re
 import os
-from typing import List, Dict, Optional, Union
+import getpass
+from typing import List, Dict, Optional, Union, Tuple
 
 def read_targets() -> List[str]:
     try:
@@ -18,21 +19,79 @@ def read_targets() -> List[str]:
         print(f"Error: Invalid JSON in targets.json: {e}")
         return []
 
-def run_traceroute(target: str) -> List[str]:
+# Global variable to cache sudo password
+_sudo_password = None
+
+def check_sudo_needed() -> bool:
+    """Check if we need sudo by trying to run traceroute without it"""
+    # If we're already root, no sudo needed
     try:
-        result = subprocess.run(
-            ['traceroute', '-I', target],
+        if os.geteuid() == 0:
+            return False
+    except AttributeError:
+        # Windows doesn't have geteuid, assume we don't need sudo
+        # (though this script is for Unix/Linux)
+        pass
+    
+    # Try a quick test traceroute to see if we get permission denied
+    try:
+        test_result = subprocess.run(
+            ['traceroute', '-I', '-m', '1', '127.0.0.1'],
             capture_output=True,
             text=True,
-            timeout=120
+            timeout=5
         )
-        return result.stdout.split('\n')
+        
+        # Check if we got a permission error
+        stderr_lower = test_result.stderr.lower() if test_result.stderr else ''
+        stdout_lower = test_result.stdout.lower() if test_result.stdout else ''
+        combined = stderr_lower + stdout_lower
+        
+        # Look for common permission error messages
+        permission_keywords = ['permission', 'privileges', 'not permitted', 'operation not permitted']
+        return any(keyword in combined for keyword in permission_keywords)
+    except Exception:
+        # If we can't even run traceroute, assume we might need sudo
+        # User will see the actual error when we try to run it
+        return False
+
+def get_sudo_password() -> Optional[str]:
+    """Prompt for sudo password once and cache it"""
+    global _sudo_password
+    if _sudo_password is None:
+        _sudo_password = getpass.getpass("traceroute requires sudo privileges. Please enter your password: ")
+    return _sudo_password
+
+def run_traceroute(target: str, use_sudo: bool = False, sudo_password: Optional[str] = None) -> Tuple[List[str], List[str], int]:
+    try:
+        if use_sudo and sudo_password:
+            # Use sudo -S to read password from stdin
+            cmd = ['sudo', '-S', 'traceroute', '-I', target]
+            result = subprocess.run(
+                cmd,
+                input=sudo_password + '\n',
+                capture_output=True,
+                text=True,
+                timeout=120
+            )
+        else:
+            result = subprocess.run(
+                ['traceroute', '-I', target],
+                capture_output=True,
+                text=True,
+                timeout=120
+            )
+        
+        # Return both stdout and stderr lines for debugging
+        stdout_lines = result.stdout.split('\n') if result.stdout else []
+        stderr_lines = result.stderr.split('\n') if result.stderr else []
+        return stdout_lines, stderr_lines, result.returncode
     except subprocess.TimeoutExpired:
         print(f"Warning: traceroute to {target} timed out after 120 seconds")
-        return []
+        return [], [], -1
     except Exception as e:
         print(f"Error running traceroute to {target}: {e}")
-        return []
+        return [], [], -1
 
 def parse_traceroute_line(line: str) -> Optional[Dict[str, Union[str, int, None]]]:
     
@@ -71,25 +130,38 @@ def parse_traceroute_line(line: str) -> Optional[Dict[str, Union[str, int, None]
         'ping': ping_value
     }
 
-def process_traceroute(target: str, debug: bool = False) -> List[Dict[str, Union[str, int, None]]]:
+def process_traceroute(target: str, debug: bool = False, use_sudo: bool = False, sudo_password: Optional[str] = None) -> List[Dict[str, Union[str, int, None]]]:
     print(f"Running traceroute to {target}...")
-    output_lines = run_traceroute(target)
+    stdout_lines, stderr_lines, returncode = run_traceroute(target, use_sudo=use_sudo, sudo_password=sudo_password)
     
-    if not output_lines:
-        if debug:
-            print(f"  Debug: No output lines returned for {target}")
-        return []
+    # Check for sudo password errors
+    if use_sudo and sudo_password:
+        stderr_combined = ' '.join(stderr_lines).lower() if stderr_lines else ''
+        if 'sorry' in stderr_combined or 'incorrect password' in stderr_combined or 'authentication failure' in stderr_combined:
+            print(f"  Error: Incorrect sudo password. Please run the script again.")
+            return []
     
     if debug:
-        print(f"  Debug: Received {len(output_lines)} lines of output")
-        # Show first few non-empty lines for debugging
-        non_empty = [line for line in output_lines[:10] if line.strip()]
-        if non_empty:
-            print(f"  Debug: First few lines: {non_empty[:3]}")
+        print(f"  Debug: traceroute exit code: {returncode}")
+        print(f"  Debug: Received {len(stdout_lines)} stdout lines, {len(stderr_lines)} stderr lines")
+        if stdout_lines:
+            print(f"  Debug: stdout lines (first 5):")
+            for i, line in enumerate(stdout_lines[:5], 1):
+                print(f"    [{i}] {repr(line)}")
+        if stderr_lines:
+            print(f"  Debug: stderr lines:")
+            for i, line in enumerate(stderr_lines[:5], 1):
+                if line.strip():
+                    print(f"    [{i}] {repr(line)}")
+    
+    if not stdout_lines:
+        if debug:
+            print(f"  Debug: No stdout lines returned for {target}")
+        return []
     
     hops = []
     parsed_count = 0
-    for line in output_lines:
+    for line in stdout_lines:
         hop_data = parse_traceroute_line(line)
         if hop_data:
             parsed_count += 1
@@ -97,25 +169,45 @@ def process_traceroute(target: str, debug: bool = False) -> List[Dict[str, Union
                 hops.append(hop_data)
     
     # Debug: show if we parsed any lines but filtered them out
-    if parsed_count > 0 and len(hops) == 0:
-        print(f"  Debug: Parsed {parsed_count} hop(s) but all were filtered (hop <= 1)")
-    elif debug and parsed_count == 0:
-        print(f"  Debug: Could not parse any hop lines from output")
+    if debug:
+        if parsed_count > 0 and len(hops) == 0:
+            print(f"  Debug: Parsed {parsed_count} hop(s) but all were filtered (hop <= 1)")
+        elif parsed_count == 0:
+            print(f"  Debug: Could not parse any hop lines from output")
+            # Show a sample line that failed to parse
+            sample_lines = [line for line in stdout_lines[:10] if line.strip()]
+            if sample_lines:
+                print(f"  Debug: Sample line that failed to parse: {repr(sample_lines[0])}")
     
     return hops
 
 def format_results(hops: List[Dict[str, Union[str, int, None]]]) -> List[Dict[str, Union[str, int, None]]]:
-    """Format hops into origin, destination, pingTime format"""
+    """Format hops into origin, destination, pingTime format.
+    Calculates ping time as the absolute difference between consecutive hops' ping times."""
     results = []
     
     for i in range(len(hops)):
         if i == 0:
             origin = "unknown"
+            # For first hop, use its ping time directly (time from origin to first hop)
+            ping_time = hops[i]['ping']
         else:
             origin = hops[i-1]['ip']
+            # Calculate the difference between consecutive hops
+            prev_ping = hops[i-1]['ping']
+            curr_ping = hops[i]['ping']
+            
+            if prev_ping is not None and curr_ping is not None:
+                # Absolute difference between consecutive hops
+                ping_time = abs(curr_ping - prev_ping)
+            elif curr_ping is not None:
+                # If previous hop had no ping, use current hop's ping
+                ping_time = curr_ping
+            else:
+                # If current hop has no ping, set to None
+                ping_time = None
         
         destination = hops[i]['ip']
-        ping_time = hops[i]['ping']
         
         results.append({
             'origin': origin,
@@ -126,7 +218,7 @@ def format_results(hops: List[Dict[str, Union[str, int, None]]]) -> List[Dict[st
     return results
 
 def save_results(results: List[Dict[str, Union[str, int, None]]], filename: str = 'results.json'):
-    """Save results to JSON file"""
+    """Save results to JSON file, avoiding duplicates to preserve geolocation data"""
     if not results:
         print("No results to save")
         return
@@ -141,7 +233,31 @@ def save_results(results: List[Dict[str, Union[str, int, None]]], filename: str 
         except (json.JSONDecodeError, IOError):
             existing_results = []
     
-    all_results = existing_results + results
+    # Create a set of (origin, destination) tuples to track existing entries
+    existing_keys = set()
+    for entry in existing_results:
+        origin = entry.get('origin', 'unknown')
+        destination = entry.get('destination', '')
+        existing_keys.add((origin, destination))
+    
+    # Only add new entries that don't already exist
+    new_results = []
+    skipped_count = 0
+    for entry in results:
+        origin = entry.get('origin', 'unknown')
+        destination = entry.get('destination', '')
+        key = (origin, destination)
+        
+        if key not in existing_keys:
+            new_results.append(entry)
+            existing_keys.add(key)  # Track it to avoid duplicates within new_results
+        else:
+            skipped_count += 1
+    
+    if skipped_count > 0:
+        print(f"  Skipped {skipped_count} duplicate entries (preserving existing geolocation data)")
+    
+    all_results = existing_results + new_results
     
     with open(filename, 'w') as f:
         json.dump(all_results, f, indent=2)
@@ -160,12 +276,21 @@ def main():
     if debug_mode:
         print("Debug mode enabled")
     
+    # Check if we need sudo and prompt for password if needed
+    use_sudo = False
+    sudo_password = None
+    if check_sudo_needed():
+        print("traceroute -I requires root privileges.")
+        use_sudo = True
+        sudo_password = get_sudo_password()
+        print("Using sudo for traceroute commands...")
+    
     all_results = []
     successful_targets = 0
     failed_targets = 0
     
     for target in targets:
-        hops = process_traceroute(target, debug=debug_mode)
+        hops = process_traceroute(target, debug=debug_mode, use_sudo=use_sudo, sudo_password=sudo_password)
         if hops:
             results = format_results(hops)
             all_results.extend(results)
@@ -182,6 +307,11 @@ def main():
     else:
         print("\nNo results to save - all traceroutes failed or returned no parseable hops")
         print(f"Summary: {failed_targets} target(s) failed")
+    
+    # Clear sudo password from memory for security
+    global _sudo_password
+    if _sudo_password:
+        _sudo_password = None
 
 if __name__ == '__main__':
     main()

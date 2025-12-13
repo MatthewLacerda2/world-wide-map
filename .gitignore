@@ -127,3 +127,7 @@ coverage.xml
 .hypothesis/
 .pytest_cache/
 
+# Results JSON files
+results.json
+**/results.json
+
