@@ -12,9 +12,9 @@ import {
 } from "react-leaflet";
 import "./App.css";
 
-// Google Drive direct download URL for results.json
-const GOOGLE_DRIVE_FILE_ID = "1GDcy8gqsFB7sXIWfPmGSM4lW0yEjYvcU";
-const RESULTS_JSON_URL = `https://drive.google.com/uc?export=download&id=${GOOGLE_DRIVE_FILE_ID}`;
+// GitHub Gist raw URL for results.json
+const RESULTS_JSON_URL =
+  "https://gist.githubusercontent.com/MatthewLacerda2/e087768cee30773ac20c7eec2e16fdfb/raw/results.json";
 
 // Fix for default marker icons in React-Leaflet
 import icon from "leaflet/dist/images/marker-icon.png";
@@ -195,7 +195,7 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Fetch results.json from Google Drive
+  // Fetch results.json from GitHub Gist
   useEffect(() => {
     const fetchData = async () => {
       try {
