@@ -31,3 +31,8 @@ We want traceroutes as geographically distributed as possible.
 The Spots are simply to get baseline data
 
 There is a React project to github pages so people can nicely visualize stuff
+
+# Known Issue
+
+We're using simple traceroute, vulnerable to load-balancing and thus different results
+No fix for anycasting yet
