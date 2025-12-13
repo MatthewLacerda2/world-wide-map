@@ -1,25 +1,33 @@
 # world-wide-map
 
-A crowdsourced internet topology
+A distributed internet topology system
 
-People can run a `traceroute-app` to help trace the internet's map, then send the results to be processed and then made public
-The server will run the IPs from the traceroute into an ip geolocator
+People can run traceroute and we'll cramp the results together.
+The server will extract IPs, their geolocation, and ping-times between hops.
 
-# How to run
+# How to participate
 
-If you're on _Windows_: `python .\traceroute-app\windows.py`
+Enter `traceroute-app` folder.
+There is a targets.json, with a list of URLs to traceroute.
+They must all be URLs, not raw IPs. That's to try to stick to more static IPs.
+Run `unix.py` and let it be.
+The app removes your own IP, for privacy.
 
-If you're on _Unix_, `python ./traceroute-app/unix.py`
+You can edit targets.json.
+
+- Reasons to add more targets:
+  Contribute more info. Hopefully they're not anycasted DNSs
+- Reasons to remove targets
+  You're in a hurry. Life is short.
 
 # Infra
 
-- We got a list of URLs to traceroute to
-- The user runs the app that traceroutes from their machine
-  - The app extracts the IPs from the traceroute, along with the response time
-  - The app sends each traceroute's result to the main server via POST request
-- The request goes to Cloudflare which simply Tunnels it to the server (i ain't got a static IP, yo)
-- I receive the results and run them via ip-api.com, and then save everything to a supabase db
+- We got GCP Spot Instances, one in most regions, running our app
+  Spots are just cheap Lambdas
+- We got an api in Cloud Run taking POST requests for those traceroute results
+  It'll save them to a SQL Instance
+
+We want traceroutes as geographically distributed as possible.
+The Spots are simply to get baseline data
 
 There is a React project to github pages so people can nicely visualize stuff
-
-The supabase db is public read
