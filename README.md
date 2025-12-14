@@ -12,7 +12,9 @@ I tracerouted to a bunch of targets to map the internet's topology.
 - Throw those IPs in a geolocator api
 - Display in a map
 
-I ommited >3000km hops
+I ommited >6000km hops
+I was told to use UDP as well as ICMP. It gives the final destination more consistenly, but misses way more hops.
+I didn't get marked as bad request by any ISP or router.
 
 # How to run
 
@@ -46,6 +48,8 @@ My initial idea was to run this in Google Cloud Function, one for each region, a
 - Better `for cheap` than not not renting at all
 - They just give a preemptive warning `i'll shut you down in 30 seconds`
 - Fine for my case, i'd pick up where i left off
+
+Running this on the Cloud would've given more data. Not much more benefit other than maybe practice. Would've been cheap, tho
 
 _But! There are so many rabbit-holes..._
 

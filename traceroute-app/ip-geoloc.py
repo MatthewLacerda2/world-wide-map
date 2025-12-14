@@ -6,7 +6,7 @@ from typing import Dict, Optional
 SPEED_OF_LIGHT = 299792458  # m/s
 EARTH_RADIUS = 6371000  # meters
 SPEED_MULTIPLIER = 3
-MAX_HOP_DISTANCE_KM = 3000
+MAX_HOP_DISTANCE_KM = 6000
 PRINT_LIMIT = 10
 RESULTS_FILE = "results.json"
 

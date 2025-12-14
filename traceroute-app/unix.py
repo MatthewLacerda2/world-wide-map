@@ -53,7 +53,7 @@ def read_targets() -> List[str]:
 def run_traceroute(target: str, sudo_password: Optional[str] = None) -> Tuple[List[str], List[str], int]:
     """Run traceroute command and return stdout, stderr lines, and return code"""
     try:
-        cmd = ['sudo', '-S', 'traceroute', '-I', target]
+        cmd = ['sudo', '-S', 'traceroute', '-I', '-n', target]
         input_data = (sudo_password + '\n') if sudo_password else ''
         
         result = subprocess.run(
