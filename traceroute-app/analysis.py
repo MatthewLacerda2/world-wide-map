@@ -3,6 +3,7 @@
 Script to analyze results.json and report statistics:
 - Number of unique IP addresses
 - Total number of hops
+- Top 10 IPs by connection count (appearances as origin or destination)
 """
 
 import json
@@ -35,7 +36,9 @@ def analyze_results(filename: str = RESULTS_FILE):
         return
     
     # Collect unique IPs from both origin and destination
+    # Also count connections (appearances as origin or destination)
     unique_ips = set()
+    ip_connection_count = {}  # IP -> count of connections
     total_hops = len(data)
     
     for entry in data:
@@ -45,10 +48,12 @@ def analyze_results(filename: str = RESULTS_FILE):
         # Add origin IP if it's not "unknown" and not empty
         if origin and origin != 'unknown':
             unique_ips.add(origin)
+            ip_connection_count[origin] = ip_connection_count.get(origin, 0) + 1
         
         # Add destination IP if it's not empty
         if destination:
             unique_ips.add(destination)
+            ip_connection_count[destination] = ip_connection_count.get(destination, 0) + 1
     
     # Count targets
     targets_path = Path(TARGETS_FILE)
@@ -62,6 +67,10 @@ def analyze_results(filename: str = RESULTS_FILE):
         except (json.JSONDecodeError, IOError):
             pass
     
+    # Sort IPs by connection count (descending)
+    sorted_ips = sorted(ip_connection_count.items(), key=lambda x: x[1], reverse=True)
+    top_10_ips = sorted_ips[:10]
+    
     # Print results
     print(f"Results Analysis for {filename}")
     print("=" * 50)
@@ -70,6 +79,15 @@ def analyze_results(filename: str = RESULTS_FILE):
     if target_count > 0:
         print(f"Targets in {TARGETS_FILE}: {target_count:,}")
     print()
+    
+    # Print top 10 IPs by connection count
+    if top_10_ips:
+        print("Top 10 IPs by connection count:")
+        print("-" * 50)
+        for i, (ip, count) in enumerate(top_10_ips, 1):
+            print(f"  {i:2d}. {ip:20s} - {count:,} connection(s)")
+        print()
+    
     print("Remember, as you add more targets, the same hops will show up (diminishing returns)")
 
 if __name__ == '__main__':

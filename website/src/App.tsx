@@ -10,10 +10,10 @@ import iconShadow from "leaflet/dist/images/marker-shadow.png";
 
 import { ErrorScreen } from "./components/ErrorScreen";
 import { LoadingScreen } from "./components/LoadingScreen";
-import { LocationMarker } from "./components/LocationMarker";
 import { MapBoundsController } from "./components/MapBoundsController";
 import { MapLegend } from "./components/MapLegend";
-import { NetworkEdge } from "./components/NetworkEdge";
+import { WrappedLocationMarker } from "./components/WrappedLocationMarker";
+import { WrappedNetworkEdge } from "./components/WrappedNetworkEdge";
 import { useResultsData } from "./hooks/useResultsData";
 import { useUniqueNodes } from "./hooks/useUniqueNodes";
 import type { ResultEntry } from "./types";
@@ -57,6 +57,7 @@ function App() {
         center={[0, 0]}
         zoom={2}
         style={{ width: "100%", height: "100%" }}
+        worldCopyJump={true}
       >
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
@@ -66,12 +67,12 @@ function App() {
 
         {/* Render nodes (markers) */}
         {Array.from(nodes.values()).map((geo, index) => (
-          <LocationMarker key={index} geo={geo} />
+          <WrappedLocationMarker key={index} geo={geo} index={index} />
         ))}
 
         {/* Render edges (polylines) */}
         {data.map((entry: ResultEntry, index) => (
-          <NetworkEdge
+          <WrappedNetworkEdge
             key={index}
             entry={entry}
             index={index}

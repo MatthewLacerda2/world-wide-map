@@ -91,15 +91,21 @@ def parse_traceroute_line(line: str) -> Optional[Hop]:
     if re.match(r'^\s*\d+\s+\*\s+\*\s+\*', line):
         return None
     
-    pattern = r'^\s*(\d+)\s+(?:(\S+)\s+)?\((\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\)\s+(\*|\d+\.?\d*)\s+ms\s+(\*|\d+\.?\d*)\s+ms\s+(\*|\d+\.?\d*)\s+ms'
+    # Pattern handles both formats:
+    # With parentheses: "1  (172.24.96.1)  0.458 ms  0.442 ms  0.440 ms"
+    # Without parentheses (with -n flag): "1  172.24.96.1  0.458 ms  0.442 ms  0.440 ms"
+    pattern = r'^\s*(\d+)\s+(?:(\S+)\s+)?(?:\((\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\)|(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}))\s+(\*|\d+\.?\d*)\s+ms\s+(\*|\d+\.?\d*)\s+ms\s+(\*|\d+\.?\d*)\s+ms'
     match = re.match(pattern, line)
     
     if not match:
         return None
     
     hop_num = int(match.group(1))
-    ip = match.group(3)
-    ping_strings = [match.group(4), match.group(5), match.group(6)]
+    # IP can be in group 3 (with parentheses) or group 4 (without parentheses)
+    ip = match.group(3) if match.group(3) else match.group(4)
+    if not ip:
+        return None
+    ping_strings = [match.group(5), match.group(6), match.group(7)]
     ping_value = _extract_ping_value(ping_strings)
     
     try:
@@ -213,6 +219,8 @@ def save_results(results: List[ResultEntry], filename: str = RESULTS_FILE):
         else:
             skipped_count += 1
     
+    if len(new_results) > 0:
+        print(f"  Added {len(new_results)} new hop(s)")
     if skipped_count > 0:
         print(f"  Skipped {skipped_count} duplicate entries (preserving existing geolocation data)")
     
@@ -251,7 +259,7 @@ def main():
             print(f"  Processed {len(results)} hops for {target} (UUID: {route_uuid})")
         else:
             failed_targets += 1
-            print(f"  No hops found for {target}")
+            print(f"  No hops found")
     
     if all_results:
         save_results(all_results)

@@ -3,10 +3,10 @@ import math
 import requests
 from typing import Dict, Optional
 
-SPEED_OF_LIGHT = 299792458  # m/s
-EARTH_RADIUS = 6371000  # meters
+SPEED_OF_LIGHT_METERS = 299792458
+EARTH_RADIUS_METERS = 6371000
 SPEED_MULTIPLIER = 3
-MAX_HOP_DISTANCE_KM = 6000
+MAX_LAND_HOP_DISTANCE_KM = 3000
 PRINT_LIMIT = 10
 RESULTS_FILE = "results.json"
 
@@ -15,10 +15,10 @@ def calculate_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> fl
     lat2_rad, lon2_rad = math.radians(lat2), math.radians(lon2)
     dlat, dlon = lat2_rad - lat1_rad, lon2_rad - lon1_rad
     a = math.sin(dlat / 2)**2 + math.cos(lat1_rad) * math.cos(lat2_rad) * math.sin(dlon / 2)**2
-    return EARTH_RADIUS * 2 * math.asin(math.sqrt(a))
+    return EARTH_RADIUS_METERS * 2 * math.asin(math.sqrt(a))
 
 def calculate_minimum_ping_time(distance_meters: float) -> float:
-    return (distance_meters * SPEED_MULTIPLIER) / SPEED_OF_LIGHT * 1000
+    return (distance_meters * SPEED_MULTIPLIER) / SPEED_OF_LIGHT_METERS * 1000
 
 def clamp_ping_time(ping_time: Optional[int], min_ping_time: float) -> Optional[int]:
     return None if ping_time is None else max(ping_time, math.ceil(min_ping_time))
@@ -92,7 +92,7 @@ def process_results():
                         print(f"Clamped ping {original_ping}ms -> {clamped_ping}ms (distance: {distance_km:.2f}km)")
                 
                 # Filter long hops
-                if distance_km > MAX_HOP_DISTANCE_KM:
+                if distance_km > MAX_LAND_HOP_DISTANCE_KM:
                     filtered_count += 1
                     if filtered_count <= PRINT_LIMIT:
                         print(f"Filtered hop {entry.get('origin')} -> {entry.get('destination')} ({distance_km:.2f}km)")
@@ -109,7 +109,7 @@ def process_results():
         save_results(filtered_results)
         if filtered_count > PRINT_LIMIT:
             print(f"... and {filtered_count - PRINT_LIMIT} more filtered")
-        print(f"Filtered {filtered_count} hop(s) > {MAX_HOP_DISTANCE_KM}km")
+        print(f"Filtered {filtered_count} hop(s) > {MAX_LAND_HOP_DISTANCE_KM}km")
     
     unique_routes = len(set(e.get("uuid") for e in filtered_results if e.get("uuid")))
     print(f"\nProcessed {len(filtered_results)} entries across {unique_routes} traceroutes.")
