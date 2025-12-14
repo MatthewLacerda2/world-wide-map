@@ -21,10 +21,10 @@ import type { ResultEntry } from "./types";
 const DefaultIcon = L.icon({
   iconUrl: icon,
   shadowUrl: iconShadow,
-  iconSize: [20, 30],
-  iconAnchor: [10, 30],
-  popupAnchor: [1, -25],
-  shadowSize: [30, 30],
+  iconSize: [12, 18],
+  iconAnchor: [6, 18],
+  popupAnchor: [1, -15],
+  shadowSize: [15, 15],
 });
 
 L.Marker.prototype.options.icon = DefaultIcon;
