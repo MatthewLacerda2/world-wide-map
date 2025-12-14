@@ -50,6 +50,7 @@ My initial idea was to run this in Google Cloud Function, one for each region, a
 - Fine for my case, i'd pick up where i left off
 
 Running this on the Cloud would've given more data. Not much more benefit other than maybe practice. Would've been cheap, tho
+Hence why there is a 'server' folder with an ExpressJS api. A sketch of the original idea.
 
 _But! There are so many rabbit-holes..._
 
@@ -74,6 +75,7 @@ The map serves for internet topology, not route map
 By tracing to geographically dispersed targets, i can map the whole public web
 
 ## And if i can do it by myself, i'll save it to a .json file and let my github-pages website read from it
+Hence why i started to get deminishing returns. A package going to Moscow maybe simply take half the route of a package going to Italy, no new data there.
 
 That's where gist.github.com comes in, since Google Drive gives you CORS
 
