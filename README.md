@@ -12,6 +12,8 @@ I tracerouted to a bunch of targets to map the internet's topology.
 - Throw those IPs in a geolocator api
 - Display in a map
 
+I ommited >3000km hops
+
 # How to run
 
 ```
@@ -26,9 +28,16 @@ Targets in the same location can still be useful, due to load-balancers screwing
 
 # What did i learn
 
+## TLDR
+
 You get +20ms ping, for every 1000km in land-based routes
 You get +09ms ping, for every 1000km in submarine-cable routes
 _I actually knew it from playing online, i was competitive..._
+
+Knowing Protocols is great. Knowing routes is pointless, you're not gonna define 'em
+That's how you vibe-code your way.
+
+## Post:
 
 My initial idea was to run this in Google Cloud Function, one for each region, and send it to an api in Cloud Run (serverless). Said api would be open to the public, for sending traceroute results and seeing the data
 
@@ -62,11 +71,13 @@ By tracing to geographically dispersed targets, i can map the whole public web
 
 ## And if i can do it by myself, i'll save it to a .json file and let my github-pages website read from it
 
-That's where git.github.com comes in, since Google Drive gives you CORS
+That's where gist.github.com comes in, since Google Drive gives you CORS
 
 And i learned almost all that in 24 hours, with Claude, Grok and vibe-coding.
 Sure AI isn't trustworthy for production, but you shouldn't neglect it for learning.
 [Here's a video](https://www.youtube.com/watch?v=LCEmiRjPEtQ) with Andrej Karpathy about it. He is a very reasonable guy.
+
+Not to mention the targets.json, and the throwaway scripts i did to normalize the results.json as i learned
 
 _Casting_
 

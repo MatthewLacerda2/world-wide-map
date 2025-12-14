@@ -116,11 +116,6 @@ def _check_sudo_error(stderr_lines: List[str]) -> bool:
     error_keywords = ['sorry', 'incorrect password', 'authentication failure']
     return any(keyword in stderr_combined for keyword in error_keywords)
 
-def _debug_print(debug: bool, message: str, *args):
-    """Helper to print debug messages"""
-    if debug:
-        print(f"  Debug: {message}", *args)
-
 def process_traceroute(target: str, debug: bool = False, sudo_password: Optional[str] = None) -> List[Hop]:
     """Run traceroute and parse hops, filtering first hop for privacy"""
     print(f"Running traceroute to {target}...")
@@ -130,21 +125,21 @@ def process_traceroute(target: str, debug: bool = False, sudo_password: Optional
         print("  Error: Incorrect sudo password. Please run the script again.")
         return []
     
-    _debug_print(debug, f"traceroute exit code: {returncode}")
-    _debug_print(debug, f"Received {len(stdout_lines)} stdout lines, {len(stderr_lines)} stderr lines")
-    
-    if debug and stdout_lines:
-        print("  Debug: stdout lines (first 5):")
-        for i, line in enumerate(stdout_lines[:5], 1):
-            print(f"    [{i}] {repr(line)}")
-    if debug and stderr_lines:
-        print("  Debug: stderr lines:")
-        for i, line in enumerate(stderr_lines[:5], 1):
-            if line.strip():
+    if debug:
+        print(f"  Debug: exit code {returncode}, {len(stdout_lines)} stdout, {len(stderr_lines)} stderr lines")
+        if stdout_lines:
+            print("  Debug: stdout (first 5):")
+            for i, line in enumerate(stdout_lines[:5], 1):
                 print(f"    [{i}] {repr(line)}")
+        if stderr_lines:
+            print("  Debug: stderr:")
+            for i, line in enumerate(stderr_lines[:5], 1):
+                if line.strip():
+                    print(f"    [{i}] {repr(line)}")
     
     if not stdout_lines:
-        _debug_print(debug, f"No stdout lines returned for {target}")
+        if debug:
+            print(f"  Debug: No stdout lines returned for {target}")
         return []
     
     hops = []
@@ -158,54 +153,39 @@ def process_traceroute(target: str, debug: bool = False, sudo_password: Optional
     
     if debug:
         if parsed_count > 0 and len(hops) == 0:
-            _debug_print(debug, f"Parsed {parsed_count} hop(s) but all were filtered (hop <= {FIRST_HOP_FILTER})")
+            print(f"  Debug: Parsed {parsed_count} hop(s) but all were filtered (hop <= {FIRST_HOP_FILTER})")
         elif parsed_count == 0:
-            _debug_print(debug, "Could not parse any hop lines from output")
-            sample_lines = [line for line in stdout_lines[:10] if line.strip()]
-            if sample_lines:
-                _debug_print(debug, f"Sample line that failed to parse: {repr(sample_lines[0])}")
+            print("  Debug: Could not parse any hop lines")
+            sample = next((line for line in stdout_lines[:10] if line.strip()), None)
+            if sample:
+                print(f"  Debug: Sample line: {repr(sample)}")
     
     return hops
 
 def _calculate_hop_ping_time(current_hop: Hop, previous_hop: Optional[Hop]) -> Optional[int]:
     """Calculate ping time between two hops"""
     if previous_hop is None:
-        # First hop: use its ping time directly
         return current_hop.ping
-    
-    prev_ping = previous_hop.ping
-    curr_ping = current_hop.ping
-    
-    if prev_ping is not None and curr_ping is not None:
-        return abs(curr_ping - prev_ping)
-    elif curr_ping is not None:
-        return curr_ping
-    else:
-        return None
+    if previous_hop.ping is not None and current_hop.ping is not None:
+        return abs(current_hop.ping - previous_hop.ping)
+    return current_hop.ping
 
 def format_results(hops: List[Hop], route_uuid: str) -> List[ResultEntry]:
-    """Format hops into origin, destination, pingTime format.
-    Calculates ping time as the absolute difference between consecutive hops' ping times."""
-    results = []
-    
-    for i, hop in enumerate(hops):
-        origin = "unknown" if i == 0 else hops[i-1].ip
-        ping_time = _calculate_hop_ping_time(hop, hops[i-1] if i > 0 else None)
-        
-        results.append(ResultEntry(
+    """Format hops into origin, destination, pingTime format."""
+    return [
+        ResultEntry(
             uuid=route_uuid,
-            origin=origin,
+            origin="unknown" if i == 0 else hops[i-1].ip,
             destination=hop.ip,
-            pingTime=ping_time
-        ))
-    
-    return results
+            pingTime=_calculate_hop_ping_time(hop, hops[i-1] if i > 0 else None)
+        )
+        for i, hop in enumerate(hops)
+    ]
 
 def _load_existing_results(filename: str) -> List[dict]:
     """Load existing results from JSON file"""
     if not os.path.exists(filename):
         return []
-    
     try:
         with open(filename, 'r') as f:
             data = json.load(f)
@@ -214,12 +194,6 @@ def _load_existing_results(filename: str) -> List[dict]:
         print(f"  Warning: Could not read existing results file: {e}")
         return []
 
-def _get_entry_key(entry: dict) -> Tuple[str, str]:
-    """Extract (origin, destination) key from an entry (dict or Pydantic model)"""
-    if isinstance(entry, dict):
-        return (entry.get('origin', 'unknown'), entry.get('destination', ''))
-    return (entry.origin, entry.destination)
-
 def save_results(results: List[ResultEntry], filename: str = RESULTS_FILE):
     """Save results to JSON file, avoiding duplicates to preserve geolocation data"""
     if not results:
@@ -227,7 +201,7 @@ def save_results(results: List[ResultEntry], filename: str = RESULTS_FILE):
         return
     
     existing_results = _load_existing_results(filename)
-    existing_keys = {_get_entry_key(entry) for entry in existing_results}
+    existing_keys = {(e.get('origin', 'unknown'), e.get('destination', '')) for e in existing_results}
     
     new_results = []
     skipped_count = 0
@@ -235,16 +209,15 @@ def save_results(results: List[ResultEntry], filename: str = RESULTS_FILE):
         key = (entry.origin, entry.destination)
         if key not in existing_keys:
             new_results.append(entry.model_dump())
-            existing_keys.add(key)  # Avoid duplicates within new_results
+            existing_keys.add(key)
         else:
             skipped_count += 1
     
     if skipped_count > 0:
         print(f"  Skipped {skipped_count} duplicate entries (preserving existing geolocation data)")
     
-    all_results = existing_results + new_results
     with open(filename, 'w') as f:
-        json.dump(all_results, f, indent=2)
+        json.dump(existing_results + new_results, f, indent=2)
 
 def main():
     import sys
