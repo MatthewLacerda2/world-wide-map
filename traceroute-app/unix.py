@@ -83,6 +83,17 @@ def _extract_ping_value(ping_strings: List[str]) -> Optional[int]:
                 pass
     return int(round(min(valid_pings))) if valid_pings else None
 
+def _extract_ip_from_line(line: str) -> Optional[str]:
+    """Extract IP address from a traceroute line, even if it doesn't match full hop pattern.
+    This ensures we capture IPs for geolocation even when we can't create a complete hop."""
+    # Try to find IPv4 addresses in the line
+    # Pattern matches IPs in parentheses or standalone
+    ip_pattern = r'(?:\((\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\)|(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}))'
+    match = re.search(ip_pattern, line)
+    if match:
+        return match.group(1) if match.group(1) else match.group(2)
+    return None
+
 def parse_traceroute_line(line: str) -> Optional[Hop]:
     """Parse a traceroute line and return a Hop model"""
     # Skip lines with all asterisks (timeouts)
@@ -120,14 +131,15 @@ def _check_sudo_error(stderr_lines: List[str]) -> bool:
     error_keywords = ['sorry', 'incorrect password', 'authentication failure']
     return any(keyword in stderr_combined for keyword in error_keywords)
 
-def process_traceroute(target: str, debug: bool = False, sudo_password: Optional[str] = None) -> List[Hop]:
-    """Run traceroute and parse hops, filtering first hop for privacy"""
+def process_traceroute(target: str, debug: bool = False, sudo_password: Optional[str] = None) -> Tuple[List[Hop], List[str]]:
+    """Run traceroute and parse hops, filtering first hop for privacy.
+    Returns tuple of (hops, standalone_ips) where standalone_ips are IPs found but not in complete hops."""
     print(f"Running traceroute to {target}...")
     stdout_lines, stderr_lines, returncode = run_traceroute(target, sudo_password=sudo_password)
     
     if sudo_password and _check_sudo_error(stderr_lines):
         print("  Error: Incorrect sudo password. Please run the script again.")
-        return []
+        return [], []
     
     if debug:
         print(f"  Debug: exit code {returncode}, {len(stdout_lines)} stdout, {len(stderr_lines)} stderr lines")
@@ -144,9 +156,10 @@ def process_traceroute(target: str, debug: bool = False, sudo_password: Optional
     if not stdout_lines:
         if debug:
             print(f"  Debug: No stdout lines returned for {target}")
-        return []
+        return [], []
     
     hops = []
+    standalone_ips = []
     parsed_count = 0
     for line in stdout_lines:
         hop_data = parse_traceroute_line(line)
@@ -154,6 +167,11 @@ def process_traceroute(target: str, debug: bool = False, sudo_password: Optional
             parsed_count += 1
             if hop_data.hop > FIRST_HOP_FILTER:
                 hops.append(hop_data)
+        else:
+            # Even if we can't parse a complete hop, try to extract IP for geolocation
+            ip = _extract_ip_from_line(line)
+            if ip:
+                standalone_ips.append(ip)
     
     if debug:
         if parsed_count > 0 and len(hops) == 0:
@@ -163,8 +181,10 @@ def process_traceroute(target: str, debug: bool = False, sudo_password: Optional
             sample = next((line for line in stdout_lines[:10] if line.strip()), None)
             if sample:
                 print(f"  Debug: Sample line: {repr(sample)}")
+        if standalone_ips:
+            print(f"  Debug: Found {len(standalone_ips)} standalone IP(s) for geolocation")
     
-    return hops
+    return hops, standalone_ips
 
 def _calculate_hop_ping_time(current_hop: Hop, previous_hop: Optional[Hop]) -> Optional[int]:
     """Calculate ping time between two hops"""
@@ -174,16 +194,32 @@ def _calculate_hop_ping_time(current_hop: Hop, previous_hop: Optional[Hop]) -> O
         return abs(current_hop.ping - previous_hop.ping)
     return current_hop.ping
 
-def format_results(hops: List[Hop]) -> List[ResultEntry]:
-    """Format hops into origin, destination, pingTime format."""
-    return [
-        ResultEntry(
+def format_results(hops: List[Hop], standalone_ips: List[str] = None) -> List[ResultEntry]:
+    """Format hops into origin, destination, pingTime format.
+    Also creates entries for standalone IPs (IPs found but not in complete hops)."""
+    results = []
+    
+    # Format complete hops
+    for i, hop in enumerate(hops):
+        results.append(ResultEntry(
             origin="unknown" if i == 0 else hops[i-1].ip,
             destination=hop.ip,
             pingTime=_calculate_hop_ping_time(hop, hops[i-1] if i > 0 else None)
-        )
-        for i, hop in enumerate(hops)
-    ]
+        ))
+    
+    # Add entries for standalone IPs (IPs we found but couldn't create complete hops for)
+    # These are valuable for geolocation even without origin/destination context
+    if standalone_ips:
+        for ip in standalone_ips:
+            # Create entry with IP as destination and unknown origin
+            # This ensures the IP is saved for geolocation purposes
+            results.append(ResultEntry(
+                origin="unknown",
+                destination=ip,
+                pingTime=None
+            ))
+    
+    return results
 
 def _load_existing_results(filename: str) -> List[dict]:
     """Load existing results from JSON file"""
@@ -246,23 +282,30 @@ def main():
     failed_targets = 0
     
     for target in targets:
-        hops = process_traceroute(target, debug=debug_mode, sudo_password=sudo_password)
+        hops, standalone_ips = process_traceroute(target, debug=debug_mode, sudo_password=sudo_password)
         
-        if hops:
-            results = format_results(hops)
+        if hops or standalone_ips:
+            results = format_results(hops, standalone_ips)
             all_results.extend(results)
             successful_targets += 1
-            print(f"  Processed {len(results)} hops for {target}")
+            hop_count = len(hops)
+            ip_count = len(standalone_ips)
+            if hop_count > 0 and ip_count > 0:
+                print(f"  Processed {hop_count} hop(s) and {ip_count} standalone IP(s) for {target}")
+            elif hop_count > 0:
+                print(f"  Processed {hop_count} hop(s) for {target}")
+            else:
+                print(f"  Processed {ip_count} standalone IP(s) for {target}")
         else:
             failed_targets += 1
-            print(f"  No hops found")
+            print(f"  No hops or IPs found")
     
     if all_results:
         save_results(all_results)
-        print(f"\nSaved {len(all_results)} hop results to {RESULTS_FILE}")
+        print(f"\nSaved {len(all_results)} result(s) to {RESULTS_FILE}")
         print(f"Summary: {successful_targets} target(s) succeeded, {failed_targets} target(s) failed")
     else:
-        print("\nNo results to save - all traceroutes failed or returned no parseable hops")
+        print("\nNo results to save - all traceroutes failed or returned no parseable hops/IPs")
         print(f"Summary: {failed_targets} target(s) failed")
     
     # Clear sudo password from memory for security

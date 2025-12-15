@@ -1,5 +1,6 @@
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import { useState } from "react";
 import { MapContainer, TileLayer } from "react-leaflet";
 import "./App.css";
 
@@ -11,6 +12,7 @@ import { ErrorScreen } from "./components/ErrorScreen";
 import { LoadingScreen } from "./components/LoadingScreen";
 import { MapBoundsController } from "./components/MapBoundsController";
 import { MapLegend } from "./components/MapLegend";
+import { ToggleControls } from "./components/ToggleControls";
 import { WrappedLocationMarker } from "./components/WrappedLocationMarker";
 import { WrappedNetworkEdge } from "./components/WrappedNetworkEdge";
 import { useResultsData } from "./hooks/useResultsData";
@@ -31,6 +33,8 @@ L.Marker.prototype.options.icon = DefaultIcon;
 function App() {
   const { data, loading, error } = useResultsData();
   const nodes = useUniqueNodes(data);
+  const [showGeozones, setShowGeozones] = useState(true);
+  const [showEdges, setShowEdges] = useState(true);
 
   if (loading) {
     return <LoadingScreen />;
@@ -43,6 +47,12 @@ function App() {
   return (
     <div style={{ width: "100vw", height: "100vh", position: "relative" }}>
       <MapLegend />
+      <ToggleControls
+        showGeozones={showGeozones}
+        showEdges={showEdges}
+        onToggleGeozones={() => setShowGeozones(!showGeozones)}
+        onToggleEdges={() => setShowEdges(!showEdges)}
+      />
       <MapContainer
         center={[0, 0]}
         zoom={2}
@@ -60,14 +70,16 @@ function App() {
           <WrappedLocationMarker key={index} geo={geo} index={index} />
         ))}
 
+        {/* Render geozones - placeholder for future implementation */}
+        {showGeozones &&
+          // TODO: Add geozone rendering component here
+          null}
+
         {/* Render edges (polylines) */}
-        {data.map((entry: ResultEntry, index) => (
-          <WrappedNetworkEdge
-            key={index}
-            entry={entry}
-            index={index}
-          />
-        ))}
+        {showEdges &&
+          data.map((entry: ResultEntry, index) => (
+            <WrappedNetworkEdge key={index} entry={entry} index={index} />
+          ))}
       </MapContainer>
     </div>
   );
