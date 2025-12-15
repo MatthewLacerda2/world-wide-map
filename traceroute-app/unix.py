@@ -3,7 +3,6 @@ import subprocess
 import re
 import os
 import getpass
-import uuid
 from typing import List, Optional, Tuple
 from pydantic import BaseModel, ValidationError
 
@@ -20,7 +19,6 @@ class Hop(BaseModel):
     ping: Optional[int] = None
 
 class ResultEntry(BaseModel):
-    uuid: str
     origin: str
     destination: str
     pingTime: Optional[int] = None
@@ -176,11 +174,10 @@ def _calculate_hop_ping_time(current_hop: Hop, previous_hop: Optional[Hop]) -> O
         return abs(current_hop.ping - previous_hop.ping)
     return current_hop.ping
 
-def format_results(hops: List[Hop], route_uuid: str) -> List[ResultEntry]:
+def format_results(hops: List[Hop]) -> List[ResultEntry]:
     """Format hops into origin, destination, pingTime format."""
     return [
         ResultEntry(
-            uuid=route_uuid,
             origin="unknown" if i == 0 else hops[i-1].ip,
             destination=hop.ip,
             pingTime=_calculate_hop_ping_time(hop, hops[i-1] if i > 0 else None)
@@ -249,14 +246,13 @@ def main():
     failed_targets = 0
     
     for target in targets:
-        route_uuid = str(uuid.uuid4())
         hops = process_traceroute(target, debug=debug_mode, sudo_password=sudo_password)
         
         if hops:
-            results = format_results(hops, route_uuid)
+            results = format_results(hops)
             all_results.extend(results)
             successful_targets += 1
-            print(f"  Processed {len(results)} hops for {target} (UUID: {route_uuid})")
+            print(f"  Processed {len(results)} hops for {target}")
         else:
             failed_targets += 1
             print(f"  No hops found")

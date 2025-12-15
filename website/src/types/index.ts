@@ -12,7 +12,6 @@ export interface ResultEntry {
   pingTime: number;
   origin_geo?: GeoLocation | null;
   destination_geo?: GeoLocation | null;
-  uuid?: string;
 }
 
 export type ResultsData = ResultEntry[];

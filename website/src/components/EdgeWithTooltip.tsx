@@ -13,10 +13,6 @@ interface EdgeWithTooltipProps {
   destinationDisplay: string;
   pingDisplay: string;
   distanceDisplay: string;
-  uuid?: string;
-  highlightedUuid?: string | null;
-  onHover: (uuid: string | null) => void;
-  onHoverOut: () => void;
 }
 
 export function EdgeWithTooltip({
@@ -28,10 +24,6 @@ export function EdgeWithTooltip({
   destinationDisplay,
   pingDisplay,
   distanceDisplay,
-  uuid,
-  highlightedUuid,
-  onHover,
-  onHoverOut,
 }: EdgeWithTooltipProps) {
   const [tooltipPosition, setTooltipPosition] = useState<{
     x: number;
@@ -41,23 +33,6 @@ export function EdgeWithTooltip({
   const polylineRef = useRef<L.Polyline>(null);
   const map = useMap();
 
-  const isHighlighted = uuid && highlightedUuid === uuid;
-
-  // Update polyline style when highlight state changes - just increase weight slightly
-  useEffect(() => {
-    const polyline = polylineRef.current;
-    if (!polyline) return;
-
-    const displayWeight = isHighlighted ? weight + 1 : weight;
-
-    // Update the Leaflet polyline style directly - keep original color
-    polyline.setStyle({
-      color: color,
-      weight: displayWeight,
-      opacity: opacity,
-    });
-  }, [isHighlighted, color, weight, opacity]);
-
   useEffect(() => {
     const polyline = polylineRef.current;
     if (!polyline) return;
@@ -66,13 +41,11 @@ export function EdgeWithTooltip({
       const containerPoint = map.latLngToContainerPoint(e.latlng);
       setTooltipPosition({ x: containerPoint.x, y: containerPoint.y });
       setIsHovering(true);
-      onHover(uuid || null);
     };
 
     const handleMouseOut = () => {
       setIsHovering(false);
       setTooltipPosition(null);
-      onHoverOut();
     };
 
     polyline.on("mousemove", handleMouseMove);
@@ -82,13 +55,10 @@ export function EdgeWithTooltip({
       polyline.off("mousemove", handleMouseMove);
       polyline.off("mouseout", handleMouseOut);
     };
-  }, [map, onHover, onHoverOut, uuid]);
+  }, [map]);
 
   // Get the map container element for portal
   const mapContainer = map.getContainer();
-
-  // Use highlighted style if this edge is part of the highlighted UUID group
-  const displayWeight = isHighlighted ? weight + 1 : weight;
 
   return (
     <>
@@ -96,7 +66,7 @@ export function EdgeWithTooltip({
         ref={polylineRef}
         positions={positions}
         color={color}
-        weight={displayWeight}
+        weight={weight}
         opacity={opacity}
         pathOptions={{
           interactive: true,

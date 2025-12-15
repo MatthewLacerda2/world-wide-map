@@ -1,6 +1,5 @@
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import { useCallback, useState } from "react";
 import { MapContainer, TileLayer } from "react-leaflet";
 import "./App.css";
 
@@ -32,15 +31,6 @@ L.Marker.prototype.options.icon = DefaultIcon;
 function App() {
   const { data, loading, error } = useResultsData();
   const nodes = useUniqueNodes(data);
-  const [highlightedUuid, setHighlightedUuid] = useState<string | null>(null);
-
-  const handleEdgeHover = useCallback((uuid: string | null) => {
-    setHighlightedUuid(uuid);
-  }, []);
-
-  const handleEdgeHoverOut = useCallback(() => {
-    setHighlightedUuid(null);
-  }, []);
 
   if (loading) {
     return <LoadingScreen />;
@@ -76,9 +66,6 @@ function App() {
             key={index}
             entry={entry}
             index={index}
-            highlightedUuid={highlightedUuid}
-            onHover={handleEdgeHover}
-            onHoverOut={handleEdgeHoverOut}
           />
         ))}
       </MapContainer>

@@ -6,17 +6,11 @@ import { NetworkEdge } from "./NetworkEdge";
 interface WrappedNetworkEdgeProps {
   entry: ResultEntry;
   index: number;
-  highlightedUuid: string | null;
-  onHover: (uuid: string | null) => void;
-  onHoverOut: () => void;
 }
 
 export function WrappedNetworkEdge({
   entry,
   index,
-  highlightedUuid,
-  onHover,
-  onHoverOut,
 }: WrappedNetworkEdgeProps) {
   const map = useMap();
   const [wrappedEntries, setWrappedEntries] = useState<ResultEntry[]>([entry]);
@@ -91,9 +85,6 @@ export function WrappedNetworkEdge({
           key={`${index}-${i}`}
           entry={wrappedEntry}
           index={index * 1000 + i}
-          highlightedUuid={highlightedUuid}
-          onHover={onHover}
-          onHoverOut={onHoverOut}
         />
       ))}
     </>

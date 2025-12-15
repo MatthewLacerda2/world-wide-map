@@ -111,8 +111,7 @@ def process_results():
             print(f"... and {filtered_count - PRINT_LIMIT} more filtered")
         print(f"Filtered {filtered_count} hop(s) > {MAX_LAND_HOP_DISTANCE_KM}km")
     
-    unique_routes = len(set(e.get("uuid") for e in filtered_results if e.get("uuid")))
-    print(f"\nProcessed {len(filtered_results)} entries across {unique_routes} traceroutes.")
+    print(f"\nProcessed {len(filtered_results)} entries.")
     if clamped_count > 0:
         print(f"Clamped {clamped_count} ping times.")
     print(f"Updated {RESULTS_FILE}")

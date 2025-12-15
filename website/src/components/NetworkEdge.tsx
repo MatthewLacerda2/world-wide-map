@@ -7,18 +7,9 @@ import { EdgeWithTooltip } from "./EdgeWithTooltip";
 interface NetworkEdgeProps {
   entry: ResultEntry;
   index: number;
-  highlightedUuid: string | null;
-  onHover: (uuid: string | null) => void;
-  onHoverOut: () => void;
 }
 
-export function NetworkEdge({
-  entry,
-  index,
-  highlightedUuid,
-  onHover,
-  onHoverOut,
-}: NetworkEdgeProps) {
+export function NetworkEdge({ entry, index }: NetworkEdgeProps) {
   if (!entry.origin_geo || !entry.destination_geo) {
     return null;
   }
@@ -53,16 +44,10 @@ export function NetworkEdge({
       ? `${entry.pingTime} ms`
       : "N/A";
 
-  const isHighlighted: boolean = !!(
-    entry.uuid && highlightedUuid === entry.uuid
-  );
-
   return (
-    <Fragment
-      key={`edge-group-${index}-${isHighlighted ? "highlighted" : "normal"}`}
-    >
+    <Fragment key={`edge-group-${index}`}>
       {/* Border effect - render a darker, thicker line underneath */}
-      <BorderPolyline positions={positions} isHighlighted={isHighlighted} />
+      <BorderPolyline positions={positions} isHighlighted={false} />
       {/* Main colored line on top */}
       <EdgeWithTooltip
         positions={positions}
@@ -73,10 +58,6 @@ export function NetworkEdge({
         destinationDisplay={destinationDisplay}
         pingDisplay={pingDisplay}
         distanceDisplay={distanceDisplay}
-        uuid={entry.uuid}
-        highlightedUuid={highlightedUuid}
-        onHover={onHover}
-        onHoverOut={onHoverOut}
       />
     </Fragment>
   );
