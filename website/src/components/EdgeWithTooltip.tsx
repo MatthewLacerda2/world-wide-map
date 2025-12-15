@@ -12,6 +12,7 @@ interface EdgeWithTooltipProps {
   originDisplay: string;
   destinationDisplay: string;
   pingDisplay: string;
+  distanceDisplay: string;
   uuid?: string;
   highlightedUuid?: string | null;
   onHover: (uuid: string | null) => void;
@@ -26,6 +27,7 @@ export function EdgeWithTooltip({
   originDisplay,
   destinationDisplay,
   pingDisplay,
+  distanceDisplay,
   uuid,
   highlightedUuid,
   onHover,
@@ -110,6 +112,7 @@ export function EdgeWithTooltip({
             originDisplay={originDisplay}
             destinationDisplay={destinationDisplay}
             pingDisplay={pingDisplay}
+            distanceDisplay={distanceDisplay}
           />,
           mapContainer
         )}

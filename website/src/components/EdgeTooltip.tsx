@@ -3,6 +3,7 @@ interface EdgeTooltipProps {
   originDisplay: string;
   destinationDisplay: string;
   pingDisplay: string;
+  distanceDisplay: string;
 }
 
 export function EdgeTooltip({
@@ -10,6 +11,7 @@ export function EdgeTooltip({
   originDisplay,
   destinationDisplay,
   pingDisplay,
+  distanceDisplay,
 }: EdgeTooltipProps) {
   return (
     <div
@@ -39,6 +41,9 @@ export function EdgeTooltip({
         </div>
         <div>
           <strong>Ping Time:</strong> {pingDisplay}
+        </div>
+        <div>
+          <strong>Distance:</strong> {distanceDisplay}
         </div>
       </div>
     </div>

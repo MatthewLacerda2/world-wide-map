@@ -1,6 +1,6 @@
 import { Fragment } from "react";
 import type { ResultEntry } from "../types";
-import { getEdgeColor } from "../utils";
+import { calculateDistance, getEdgeColor } from "../utils";
 import { BorderPolyline } from "./BorderPolyline";
 import { EdgeWithTooltip } from "./EdgeWithTooltip";
 
@@ -28,6 +28,19 @@ export function NetworkEdge({
     [entry.origin_geo.latitude, entry.origin_geo.longitude],
     [entry.destination_geo.latitude, entry.destination_geo.longitude],
   ] as [[number, number], [number, number]];
+
+  // Calculate distance
+  const distanceMeters = calculateDistance(
+    entry.origin_geo.latitude,
+    entry.origin_geo.longitude,
+    entry.destination_geo.latitude,
+    entry.destination_geo.longitude
+  );
+  const distanceKm = distanceMeters / 1000;
+  const distanceDisplay =
+    distanceKm >= 1
+      ? `${distanceKm.toFixed(2)} km`
+      : `${distanceMeters.toFixed(0)} m`;
 
   // Format origin and destination for display
   const originDisplay =
@@ -59,6 +72,7 @@ export function NetworkEdge({
         originDisplay={originDisplay}
         destinationDisplay={destinationDisplay}
         pingDisplay={pingDisplay}
+        distanceDisplay={distanceDisplay}
         uuid={entry.uuid}
         highlightedUuid={highlightedUuid}
         onHover={onHover}
