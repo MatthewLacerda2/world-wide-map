@@ -12,7 +12,7 @@ I tracerouted to a bunch of targets to map the internet's topology.
 - Throw those IPs in a geolocator api
 - Display in a map
 
-I ommited >6000km hops
+I ommited >3000km hops in land-based routes.
 I was told to use UDP as well as ICMP. It gives the final destination more consistenly, but misses way more hops.
 I didn't get marked as bad request by any ISP or router.
 
@@ -75,6 +75,7 @@ The map serves for internet topology, not route map
 By tracing to geographically dispersed targets, i can map the whole public web
 
 ## And if i can do it by myself, i'll save it to a .json file and let my github-pages website read from it
+
 Hence why i started to get deminishing returns. A package going to Moscow maybe simply take half the route of a package going to Italy, no new data there.
 
 That's where gist.github.com comes in, since Google Drive gives you CORS
