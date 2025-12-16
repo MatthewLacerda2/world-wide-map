@@ -9,6 +9,7 @@ import icon from "leaflet/dist/images/marker-icon.png";
 import iconShadow from "leaflet/dist/images/marker-shadow.png";
 
 import { ErrorScreen } from "./components/ErrorScreen";
+import { Geozones } from "./components/Geozones";
 import { LoadingScreen } from "./components/LoadingScreen";
 import { MapBoundsController } from "./components/MapBoundsController";
 import { MapLegend } from "./components/MapLegend";
@@ -33,7 +34,7 @@ L.Marker.prototype.options.icon = DefaultIcon;
 function App() {
   const { data, loading, error } = useResultsData();
   const nodes = useUniqueNodes(data);
-  const [showGeozones, setShowGeozones] = useState(true);
+  const [showGeozones, setShowGeozones] = useState(false);
   const [showEdges, setShowEdges] = useState(true);
 
   if (loading) {
@@ -70,10 +71,8 @@ function App() {
           <WrappedLocationMarker key={index} geo={geo} index={index} />
         ))}
 
-        {/* Render geozones - placeholder for future implementation */}
-        {showGeozones &&
-          // TODO: Add geozone rendering component here
-          null}
+        {/* Render geozones */}
+        <Geozones show={showGeozones} />
 
         {/* Render edges (polylines) */}
         {showEdges &&
