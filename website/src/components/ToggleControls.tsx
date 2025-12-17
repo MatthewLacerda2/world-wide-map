@@ -1,14 +1,10 @@
 interface ToggleControlsProps {
-  showGeozones: boolean;
   showEdges: boolean;
-  onToggleGeozones: () => void;
   onToggleEdges: () => void;
 }
 
 export function ToggleControls({
-  showGeozones,
   showEdges,
-  onToggleGeozones,
   onToggleEdges,
 }: ToggleControlsProps) {
   const buttonStyle = (isActive: boolean) => ({
@@ -57,14 +53,6 @@ export function ToggleControls({
         gap: "8px",
       }}
     >
-      <button
-        onClick={onToggleGeozones}
-        style={buttonStyle(showGeozones)}
-        onMouseEnter={(e) => handleMouseEnter(e, showGeozones)}
-        onMouseLeave={(e) => handleMouseLeave(e, showGeozones)}
-      >
-        {showGeozones ? "Hide" : "Show"} Geozones
-      </button>
       <button
         onClick={onToggleEdges}
         style={buttonStyle(showEdges)}
