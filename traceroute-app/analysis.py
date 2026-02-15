@@ -1,96 +1,73 @@
 #!/usr/bin/env python3
 """
-Script to analyze results.json and report statistics:
-- Number of unique IP addresses
-- Total number of hops
-- Top 10 IPs by connection count (appearances as origin or destination)
+Analysis tool for traceroute results.
+Displays summary statistics and top IPs by connection count.
 """
 
 import json
 import sys
 from pathlib import Path
+from typing import List, Dict, Set, Counter
 
 RESULTS_FILE = 'results.json'
 TARGETS_FILE = 'targets.json'
 
-def analyze_results(filename: str = RESULTS_FILE):
-    """Read results.json and analyze IP addresses and hops"""
-    file_path = Path(filename)
-    
-    if not file_path.exists():
-        print(f"Error: {filename} not found")
-        return
-    
+def load_json(path: Path) -> list:
+    if not path.exists():
+        return []
     try:
-        with open(file_path, 'r') as f:
-            data = json.load(f)
-    except json.JSONDecodeError as e:
-        print(f"Error: Invalid JSON in {filename}: {e}")
-        return
-    except IOError as e:
-        print(f"Error: Could not read {filename}: {e}")
-        return
+        with open(path, 'r') as f:
+            return json.load(f)
+    except (json.JSONDecodeError, IOError):
+        return []
+
+def print_header(title: str):
+    print(f"\n{title}")
+    print("=" * 50)
+
+def analyze_results(results_path: str = RESULTS_FILE):
+    path = Path(results_path)
+    data = load_json(path)
     
-    if not isinstance(data, list):
-        print(f"Error: {filename} must contain an array")
+    if not data:
+        print(f"Error: No data found in {results_path}")
         return
-    
-    # Collect unique IPs from both origin and destination
-    # Also count connections (appearances as origin or destination)
-    unique_ips = set()
-    ip_connection_count = {}  # IP -> count of connections
+
+    unique_ips: Set[str] = set()
+    ip_counter: Counter = Counter()
     total_hops = len(data)
-    
+
     for entry in data:
-        origin = entry.get('origin', '')
+        origin = entry.get('origin', 'unknown')
         destination = entry.get('destination', '')
-        
-        # Add origin IP if it's not "unknown" and not empty
-        if origin and origin != 'unknown':
+
+        if origin != 'unknown':
             unique_ips.add(origin)
-            ip_connection_count[origin] = ip_connection_count.get(origin, 0) + 1
+            ip_counter[origin] += 1
         
-        # Add destination IP if it's not empty
         if destination:
             unique_ips.add(destination)
-            ip_connection_count[destination] = ip_connection_count.get(destination, 0) + 1
+            ip_counter[destination] += 1
+
+    targets_data = load_json(Path(TARGETS_FILE))
+    target_count = len(targets_data)
+
+    print_header("Traceroute Mapping Statistics")
+    print(f"{'Total Hops Collected:':<30} {total_hops:,}")
+    print(f"{'Unique IPs Mapped:':<30} {len(unique_ips):,}")
+    if target_count:
+        print(f"{'Targets in Queue:':<30} {target_count:,}")
+
+    print_header("Top 10 Infrastructure Nodes")
+    print(f"{'#':<3} {'IP Address':<20} {'Connections'}")
+    print("-" * 50)
     
-    # Count targets
-    targets_path = Path(TARGETS_FILE)
-    target_count = 0
-    if targets_path.exists():
-        try:
-            with open(targets_path, 'r') as f:
-                targets_data = json.load(f)
-                if isinstance(targets_data, list):
-                    target_count = len(targets_data)
-        except (json.JSONDecodeError, IOError):
-            pass
-    
-    # Sort IPs by connection count (descending)
-    sorted_ips = sorted(ip_connection_count.items(), key=lambda x: x[1], reverse=True)
-    top_10_ips = sorted_ips[:10]
-    
-    # Print results
-    print(f"Results Analysis for {filename}")
-    print("=" * 50)
-    print(f"Total hops: {total_hops:,}")
-    print(f"Unique IP addresses: {len(unique_ips):,}")
-    if target_count > 0:
-        print(f"Targets in {TARGETS_FILE}: {target_count:,}")
-    print()
-    
-    # Print top 10 IPs by connection count
-    if top_10_ips:
-        print("Top 10 IPs by connection count:")
-        print("-" * 50)
-        for i, (ip, count) in enumerate(top_10_ips, 1):
-            print(f"  {i:2d}. {ip:20s} - {count:,} connection(s)")
-        print()
-    
-    print("Remember, as you add more targets, the same hops will show up (diminishing returns)")
+    for i, (ip, count) in enumerate(ip_counter.most_common(10), 1):
+        print(f"{i:<3} {ip:<20} {count:,}")
+
+    print(f"\nNote: You've currently mapped {len(unique_ips)} unique points of presence.")
+    print("Keep adding targets to fill the holes in the map!\n")
 
 if __name__ == '__main__':
-    # Allow custom filename as command line argument
     filename = sys.argv[1] if len(sys.argv) > 1 else RESULTS_FILE
     analyze_results(filename)
