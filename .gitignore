@@ -131,3 +131,4 @@ coverage.xml
 results.json
 **/results.json
 
+.cursor/
