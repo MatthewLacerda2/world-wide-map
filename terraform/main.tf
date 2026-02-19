@@ -77,7 +77,12 @@ resource "google_cloud_run_v2_service" "api" {
   project  = google_project.traceroute_project.project_id
   name     = "traceroute-api"
   location = "us-central1"
+  ingress  = "INGRESS_TRAFFIC_ALL"
+
   template {
+    scaling {
+      max_instance_count = 1
+    }
     containers {
       image = "gcr.io/cloudrun/placeholder" 
       env {
@@ -85,10 +90,14 @@ resource "google_cloud_run_v2_service" "api" {
         value = "postgresql+psycopg2://postgres:postgres@/traceroute?host=/cloudsql/${google_sql_database_instance.postgres.connection_name}"
       }
     }
+    volumes {
+      name = "cloudsql"
+      cloud_sql_instance {
+        instances = [google_sql_database_instance.postgres.connection_name]
+      }
+    }
   }
 
-  # This allows you to manually deploy new versions via 'gcloud run deploy'
-  # without Terraform trying to roll them back to the placeholder.
   lifecycle {
     ignore_changes = [
       template[0].containers[0].image,
@@ -96,7 +105,35 @@ resource "google_cloud_run_v2_service" "api" {
   }
 }
 
-# 6. Worker Infrastructure (Template + MIG)
+resource "google_cloud_run_v2_service_iam_member" "noauth" {
+  project  = google_project.traceroute_project.project_id
+  location = google_cloud_run_v2_service.api.location
+  name     = google_cloud_run_v2_service.api.name
+  role     = "roles/run.invoker"
+  member   = "allUsers"
+}
+
+# 6. Worker Script Storage
+resource "google_storage_bucket" "worker_assets" {
+  project       = google_project.traceroute_project.project_id
+  name          = "${var.project_id}-worker-assets"
+  location      = "US"
+  force_destroy = true
+}
+
+resource "google_storage_bucket_object" "worker_script" {
+  name   = "worker.py"
+  bucket = google_storage_bucket.worker_assets.name
+  source = "${path.module}/../worker/worker.py"
+}
+
+resource "google_storage_bucket_iam_member" "worker_bucket_reader" {
+  bucket = google_storage_bucket.worker_assets.name
+  role   = "roles/storage.objectViewer"
+  member = "serviceAccount:${google_project.traceroute_project.number}-compute@developer.gserviceaccount.com"
+}
+
+# 7. Worker Infrastructure (Template + MIG)
 resource "google_compute_instance_template" "worker_template" {
   project      = google_project.traceroute_project.project_id
   name_prefix  = "traceroute-worker-template-"
@@ -126,9 +163,10 @@ resource "google_compute_instance_template" "worker_template" {
     sudo apt-get install -y python3-pip traceroute
     pip3 install requests pydantic
     export API_URL="${google_cloud_run_v2_service.api.uri}"
-    # The worker.py should be fetched here (e.g. from GitHub or a Cloud Storage bucket)
-    # curl -O https://raw.githubusercontent.com/.../worker.py
-    # python3 worker.py
+    
+    # Download the worker script from GCS
+    gsutil cp gs://${google_storage_bucket.worker_assets.name}/worker.py /tmp/worker.py
+    python3 /tmp/worker.py
   EOF
 
   lifecycle {

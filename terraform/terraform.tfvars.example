@@ -1,0 +1,8 @@
+# The ID of the project to create (e.g., "my-traceroute-project-123")
+project_id      = "your-project-id"
+
+# The billing account ID to link the project to (e.g., "012345-6789AB-CDEF01")
+billing_account = "XXXXXX-XXXXXX-XXXXXX"
+
+# The organization ID (e.g., "123456789012") - Leave empty if not using an organization
+# org_id        = ""

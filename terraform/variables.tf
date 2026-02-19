@@ -1,6 +1,6 @@
 variable "project_id" {
   description = "The ID of the project to create"
-  type        = str
+  type        = string
 }
 
 variable "billing_account" {
